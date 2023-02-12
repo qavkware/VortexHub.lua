@@ -1,0 +1,1067 @@
+local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+
+local Window = Library.CreateLib("Vortex Hub", "Ocean")
+
+
+-- MAIN
+
+local Main = Window:NewTab("Main")
+local MainSection = Main:NewSection("Streamables")
+
+
+MainSection:NewButton("Streamable 1", "Legit Silent Aim", function()
+    if getgenv().Aiming then return getgenv().Aiming end
+
+-- // Services
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local GuiService = game:GetService("GuiService")
+local RunService = game:GetService("RunService")
+
+-- // Vars
+local Heartbeat = RunService.Heartbeat
+local LocalPlayer = Players.LocalPlayer
+local CurrentCamera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
+
+-- // Optimisation Vars (ugly)
+local Drawingnew = Drawing.new
+local Color3fromRGB = Color3.fromRGB
+local Vector2new = Vector2.new
+local GetGuiInset = GuiService.GetGuiInset
+local Randomnew = Random.new
+local mathfloor = math.floor
+local CharacterAdded = LocalPlayer.CharacterAdded
+local CharacterAddedWait = CharacterAdded.Wait
+local WorldToViewportPoint = CurrentCamera.WorldToViewportPoint
+local RaycastParamsnew = RaycastParams.new
+local EnumRaycastFilterTypeBlacklist = Enum.RaycastFilterType.Blacklist
+local Raycast = Workspace.Raycast
+local GetPlayers = Players.GetPlayers
+local Instancenew = Instance.new
+local IsDescendantOf = Instancenew("Part").IsDescendantOf
+local FindFirstChildWhichIsA = Instancenew("Part").FindFirstChildWhichIsA
+local FindFirstChild = Instancenew("Part").FindFirstChild
+local tableremove = table.remove
+local tableinsert = table.insert
+
+-- // Silent Aim Vars
+getgenv().Aiming = {
+    Enabled = true,
+
+    ShowFOV = false,
+    FOV = 17.4,
+    FOVSides = 25,
+    FOVColour = Color3fromRGB(231, 84, 128),
+
+    VisibleCheck = true,
+    
+    HitChance = 100,
+
+    Selected = nil,
+    SelectedPart = nil,
+
+    TargetPart = {"Head"},
+
+    Ignored = {
+        Teams = {
+            {
+                Team = LocalPlayer.Team,
+                TeamColor = LocalPlayer.TeamColor,
+            },
+        },
+        Players = {
+            LocalPlayer,
+            91318356
+        }
+    }
+}
+local Aiming = getgenv().Aiming
+
+-- // Create circle
+local circle = Drawingnew("Circle")
+circle.Transparency = 1
+circle.Thickness = 2
+circle.Color = Aiming.FOVColour
+circle.Filled = false
+Aiming.FOVCircle = circle
+
+-- // Update
+function Aiming.UpdateFOV()
+    -- // Make sure the circle exists
+    if not (circle) then
+        return
+    end
+
+    -- // Set Circle Properties
+    circle.Visible = Aiming.ShowFOV
+    circle.Radius = (Aiming.FOV * 3)
+    circle.Position = Vector2new(Mouse.X, Mouse.Y + GetGuiInset(GuiService).Y)
+    circle.NumSides = Aiming.FOVSides
+    circle.Color = Aiming.FOVColour
+
+    -- // Return circle
+    return circle
+end
+
+-- // Custom Functions
+local CalcChance = function(percentage)
+    -- // Floor the percentage
+    percentage = mathfloor(percentage)
+
+    -- // Get the chance
+    local chance = mathfloor(Randomnew().NextNumber(Randomnew(), 0, 1) * 100) / 100
+
+    -- // Return
+    return chance <= percentage / 100
+end
+
+-- // Customisable Checking Functions: Is a part visible
+function Aiming.IsPartVisible(Part, PartDescendant)
+    -- // Vars
+    local Character = LocalPlayer.Character or CharacterAddedWait(CharacterAdded)
+    local Origin = CurrentCamera.CFrame.Position
+    local _, OnScreen = WorldToViewportPoint(CurrentCamera, Part.Position)
+
+    -- //
+    if (OnScreen) then
+        -- // Vars
+        local raycastParams = RaycastParamsnew()
+        raycastParams.FilterType = EnumRaycastFilterTypeBlacklist
+        raycastParams.FilterDescendantsInstances = {Character, CurrentCamera}
+
+        -- // Cast ray
+        local Result = Raycast(Workspace, Origin, Part.Position - Origin, raycastParams)
+
+        -- // Make sure we get a result
+        if (Result) then
+            -- // Vars
+            local PartHit = Result.Instance
+            local Visible = (not PartHit or IsDescendantOf(PartHit, PartDescendant))
+
+            -- // Return
+            return Visible
+        end
+    end
+
+    -- // Return
+    return false
+end
+
+-- // Ignore player
+function Aiming.IgnorePlayer(Player)
+    -- // Vars
+    local Ignored = Aiming.Ignored
+    local IgnoredPlayers = Ignored.Players
+
+    -- // Find player in table
+    for _, IgnoredPlayer in ipairs(IgnoredPlayers) do
+        -- // Make sure player matches
+        if (IgnoredPlayer == Player) then
+            return false
+        end
+    end
+
+    -- // Blacklist player
+    tableinsert(IgnoredPlayers, Player)
+    return true
+end
+
+-- // Unignore Player
+function Aiming.UnIgnorePlayer(Player)
+    -- // Vars
+    local Ignored = Aiming.Ignored
+    local IgnoredPlayers = Ignored.Players
+
+    -- // Find player in table
+    for i, IgnoredPlayer in ipairs(IgnoredPlayers) do
+        -- // Make sure player matches
+        if (IgnoredPlayer == Player) then
+            -- // Remove from ignored
+            tableremove(IgnoredPlayers, i)
+            return true
+        end
+    end
+
+    -- //
+    return false
+end
+
+-- // Ignore team
+function Aiming.IgnoreTeam(Team, TeamColor)
+    -- // Vars
+    local Ignored = Aiming.Ignored
+    local IgnoredTeams = Ignored.Teams
+
+    -- // Find team in table
+    for _, IgnoredTeam in ipairs(IgnoredTeams) do
+        -- // Make sure team matches
+        if (IgnoredTeam.Team == Team and IgnoredTeam.TeamColor == TeamColor) then
+            return false
+        end
+    end
+
+    -- // Ignore team
+    tableinsert(IgnoredTeams, {Team, TeamColor})
+    return true
+end
+
+-- // Unignore team
+function Aiming.UnIgnoreTeam(Team, TeamColor)
+    -- // Vars
+    local Ignored = Aiming.Ignored
+    local IgnoredTeams = Ignored.Teams
+
+    -- // Find team in table
+    for i, IgnoredTeam in ipairs(IgnoredTeams) do
+        -- // Make sure team matches
+        if (IgnoredTeam.Team == Team and IgnoredTeam.TeamColor == TeamColor) then
+            -- // Remove
+            tableremove(IgnoredTeams, i)
+            return true
+        end
+    end
+
+    -- // Return
+    return false
+end
+
+
+
+
+
+-- //  Toggle team check
+
+
+function Aiming.TeamCheck
+    
+    (Toggle)
+    if (Toggle) then
+
+
+        return Aiming.Ign
+        
+        oreTeam(LocalPlayer.Team, LocalPlayer.TeamColor)
+    end
+
+
+
+
+
+    return Aiming.UnIgnor
+    
+    eTeam(LocalPlayer.Team, LocalPlayer.TeamColor)
+end
+
+
+
+
+
+-- // Check teams
+function Aiming.IsIgnoredTeam(Player)
+    -- // Vars
+    local Ignored = Aiming.Ignored
+    local IgnoredTeams = Ignored.Teams
+
+    -- // Check if team is ignored
+    for _, IgnoredTeam in ipairs(IgnoredTeams) do
+        -- // Make sure team matches
+        if (Player.Team == IgnoredTeam.Team and Player.TeamColor == IgnoredTeam.TeamColor) then
+            return true
+        end
+    end
+
+    -- // Return
+    return false
+end
+
+-- // Check if player (and team) is ignored
+function Aiming.IsIgnored(Player)
+    -- // Vars
+    local Ignored = Aiming.Ignored
+    local IgnoredPlayers = Ignored.Players
+
+    -- // Loop
+    for _, IgnoredPlayer in ipairs(IgnoredPlayers) do
+        -- // Check if Player Id
+        if (typeof(IgnoredPlayer) == "number" and Player.UserId == IgnoredPlayer) then
+            return true
+        end
+
+        -- // Normal Player Instance
+        if (IgnoredPlayer == Player) then
+            return true
+        end
+    end
+
+    -- // Team check
+    return Aiming.IsIgnoredTeam(Player)
+end
+
+-- // Get the Direction, Normal and Material
+function Aiming.Raycast(Origin, Destination, UnitMultiplier)
+    if (typeof(Origin) == "Vector3" and typeof(Destination) == "Vector3") then
+        -- // Handling
+        if (not UnitMultiplier) then UnitMultiplier = 1 end
+
+        -- // Vars
+        local Direction = (Destination - Origin).Unit * UnitMultiplier
+        local Result = Raycast(Workspace, Origin, Direction)
+
+        -- // Make sure we have a result
+        if (Result) then
+            local Normal = Result.Normal
+            local Material = Result.Material
+
+            return Direction, Normal, Material
+        end
+    end
+
+    -- // Return
+    return nil
+end
+
+-- // Get Character
+function Aiming.Character(Player)
+    return Player.Character
+end
+
+-- // Check Health
+function Aiming.CheckHealth(Player)
+    -- // Get Humanoid
+    local Character = Aiming.Character(Player)
+    local Humanoid = FindFirstChildWhichIsA(Character, "Humanoid")
+
+    -- // Get Health
+    local Health = (Humanoid and Humanoid.Health or 0)
+
+    -- //
+    return Health > 0
+end
+
+-- // Check if silent aim can used
+function Aiming.Check()
+    return (Aiming.Enabled == true and Aiming.Selected ~= LocalPlayer and Aiming.SelectedPart ~= nil)
+end
+Aiming.checkSilentAim = Aiming.Check
+
+-- // Get Closest Target Part
+function Aiming.GetClosestTargetPartToCursor(Character)
+    local TargetParts = Aiming.TargetPart
+
+    -- // Vars
+    local ClosestPart = nil
+    local ClosestPartPosition = nil
+    local ClosestPartOnScreen = false
+    local ClosestPartMagnitudeFromMouse = nil
+    local ShortestDistance = 1/0
+
+    -- //
+    local function CheckTargetPart(TargetPart)
+        -- // Convert string -> Instance
+        if (typeof(TargetPart) == "string") then
+            TargetPart = FindFirstChild(Character, TargetPart)
+        end
+
+        -- // Make sure we have a target
+        if not (TargetPart) then
+            return
+        end
+
+        -- // Get the length between Mouse and Target Part (on screen)
+        local PartPos, onScreen = WorldToViewportPoint(CurrentCamera, TargetPart.Position)
+        local GuiInset = GetGuiInset(GuiService)
+        local Magnitude = (Vector2new(PartPos.X, PartPos.Y - GuiInset.Y) - Vector2new(Mouse.X, Mouse.Y)).Magnitude
+
+        -- //
+        if (Magnitude < ShortestDistance) then
+            ClosestPart = TargetPart
+            ClosestPartPosition = PartPos
+            ClosestPartOnScreen = onScreen
+            ClosestPartMagnitudeFromMouse = Magnitude
+            ShortestDistance = Magnitude
+        end
+    end
+
+    -- // String check
+    if (typeof(TargetParts) == "string") then
+        -- // Check if it all
+        if (TargetParts == "All") then
+            -- // Loop through character children
+            for _, v in ipairs(Character:GetChildren()) do
+                -- // See if it a part
+                if not (v:IsA("BasePart")) then
+                    continue
+                end
+
+                -- // Check it
+                CheckTargetPart(v)
+            end
+        else
+            -- // Individual
+            CheckTargetPart(TargetParts)
+        end
+    end
+
+    -- //
+    if (typeof(TargetParts) == "table") then
+        -- // Loop through all target parts and check them
+        for _, TargetPartName in ipairs(TargetParts) do
+            CheckTargetPart(TargetPartName)
+        end
+    end
+
+    -- //
+    return ClosestPart, ClosestPartPosition, ClosestPartOnScreen, ClosestPartMagnitudeFromMouse
+end
+
+-- // Silent Aim Function
+function Aiming.GetClosestPlayerToCursor()
+    -- // Vars
+    local TargetPart = nil
+    local ClosestPlayer = nil
+    local Chance = CalcChance(Aiming.HitChance)
+    local ShortestDistance = 1/0
+
+    -- // Chance
+    if (not Chance) then
+        Aiming.Selected = LocalPlayer
+        Aiming.SelectedPart = nil
+
+        return LocalPlayer
+    end
+
+    -- // Loop through all players
+    for _, Player in ipairs(GetPlayers(Players)) do
+        -- // Get Character
+        local Character = Aiming.Character(Player)
+
+        -- // Make sure isn't ignored and Character exists
+        if (Aiming.IsIgnored(Player) == false and Character) then
+            -- // Vars
+            local TargetPartTemp, _, _, Magnitude = Aiming.GetClosestTargetPartToCursor(Character)
+
+            -- // Check if part exists and health
+            if (TargetPartTemp and Aiming.CheckHealth(Player)) then
+                -- // Check if is in FOV
+                if (circle.Radius > Magnitude and Magnitude < ShortestDistance) then
+                    -- // Check if Visible
+                    if (Aiming.VisibleCheck and not Aiming.IsPartVisible(TargetPartTemp, Character)) then continue end
+
+                    -- // Set vars
+                    ClosestPlayer = Player
+                    ShortestDistance = Magnitude
+                    TargetPart = TargetPartTemp
+                end
+            end
+        end
+    end
+
+    -- // End
+    Aiming.Selected = ClosestPlayer
+    Aiming.SelectedPart = TargetPart
+end
+
+-- // Heartbeat Function
+Heartbeat:Connect(function()
+    Aiming.UpdateFOV()
+    Aiming.GetClosestPlayerToCursor()
+end)
+
+-- //
+return Aiming
+
+end)
+
+MainSection:NewButton("Streamable 2", "Legit Silent Aim", function()
+    loadstring(game:HttpGet("https://gist.githubusercontent.com/diegxw/46748ae27e8a4630619d85ea1e13dc5e/raw/5225600f4150f87646b8d20088a1da9f100aaa06/settingsV2"))()
+DaHoodSettings.Prediction = 0.1437
+Aiming.TargetPart = {"Head", "UpperTorso", "LowerTorso", "HumanoidRootPart", "RightFoot", "LeftFoot"}
+Aiming.FOV = 17.4
+Aiming.FOVSides = 25
+Aiming.HitChance = 110
+
+end)
+
+MainSection:NewButton("Streamable 3", "Legit Silent Aim", function()
+    loadstring(game:HttpGet("https://raw.githubusercontent.com/T0xicJacob/eatensdad/main/eaten-streamable", true))()
+end)
+
+-- LOCAL PLAYER
+local Player = Window:NewTab("Player")
+local PlayerSection = Player:NewSection("Player")
+
+PlayerSection:NewButton("Fly", "Makes The Player Fly", function()
+    loadstring(game:HttpGet(("https://pastebin.com/raw/93tH4Ury"), true))()
+end)
+
+PlayerSection:NewButton("Admin Commands", "Gives The Player Admin Commands", function()
+    loadstring(game:HttpGet('https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source'))()
+end)
+
+PlayerSection:NewButton("GodMode", "Gives The Player GodMode", function()
+    game:GetService("StarterGui"):SetCore("SendNotification", {Title = "QAVK X MYTHICAL ", Text = "heavenly | #closetcheat", Duration = 4,});
+getgenv().Settings = {
+    ['Custom'] = {
+        ["GodV2"] = true,
+        ["GodV3"] = true,
+        ["Godblock"] = true,
+        ["Autoblock"] = true,
+        ["Hideblock"] = true,
+        ["Antislow"] = true,
+        ["Antieffect"] = true,
+    }
+}
+
+if not game['Loaded'] or not game:GetService("Players").LocalPlayer then 
+    game['Loaded']:Wait();
+    game:WaitForChild(game:GetService('Players'));
+    game:GetService('Players'):WaitForChild(game:GetService("Players").LocalPlayer.Name)
+end
+
+assert(getrawmetatable)
+gmt = getrawmetatable(game)
+setreadonly(gmt, false)
+old = gmt.__namecall
+gmt.__namecall =
+newcclosure(
+function(self, ...)
+	local args = {...}
+        if tostring(self) == "RemoteFunction" then return end
+		if tostring(self) == "MainEvent" then
+		if tostring(args[1]) == "DropMoney" or tostring(args[1]) == "TimerDecrease" or  tostring(args[1]) == "Grabbing" or tostring(args[1]) == "Block" or tostring(args[1]) == "Stomp" or tostring(args[1]) == "JoinCrew" or tostring(args[1]) == "PhoneCall" or tostring(args[1]) == "Boombox" or tostring(args[1]) == "BoomboxStop" or tostring(args[1]) == "EnterPromoCode" or tostring(args[1]) == "PurchaseSkinCrate" or tostring(args[1]) == "TimerMoney" or tostring(args[1]) == "Reload" or tostring(args[1]) == "UpdateMousePos" or tostring(args[1]) == "FireworkText" or tostring(args[1]) == "GunCombatToggle" or tostring(args[1]) == "LeaveCrew" or tostring(args[1]) == "AnimationPack" or tostring(args[1]) == "EquipWeaponSkins" or tostring(args[1]) == "REPORT_PLAYER" or tostring(args[1]) == "IS_MOBILE" or tostring(args[1]) == "GamePurchase" then
+			else 
+				return
+			end 
+		end
+	return old(self, ...)
+end)
+
+
+function AnimPlay(ID, SPEED)
+    local animation = Instance.new('Animation', game:GetService("Workspace"))
+    animation.AnimationId = 'rbxassetid://'..ID
+    playing = game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid"):LoadAnimation(animation)
+    playing:Play() 
+    if tonumber(SPEED) then
+        playing:AdjustSpeed(SPEED)
+    else
+        playing:AdjustSpeed(1)
+    end
+    animation:Destroy()
+end
+
+function AnimStop(ID, SPEED)
+    for i,v in pairs(game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid"):GetPlayingAnimationTracks()) do
+        if v.Animation.AnimationId == 'rbxassetid://'..ID then
+          if tonumber(SPEED) then
+                v:Stop(SPEED)
+            else
+                v:Stop()
+            end
+        end
+    end
+end
+
+coroutine.wrap(function()
+    if getgenv().Settings.Custom.Godblock then
+        Godblock = true
+		game:GetService("Players").LocalPlayer.Character:WaitForChild("BodyEffects"):WaitForChild("Defense"):WaitForChild("CurrentTimeBlock"):Destroy()
+	end
+end)()
+
+coroutine.wrap(function()
+    if getgenv().Settings.Custom.GodV3 then
+    game:GetService("StarterPlayer").StarterCharacterScripts["CheckingKOED                                                                   ."]:Destroy()
+        for i,v in pairs(game:GetService("Players").LocalPlayer.Character:GetChildren()) do
+            if v.ClassName == 'Script' then
+                v:Destroy()
+            end
+        end
+    end  
+end)()
+
+coroutine.wrap(function()
+    if getgenv().Settings.Custom.GodV2 then
+        GodV2 = true
+        if game:GetService("Players").LocalPlayer.Character:FindFirstChild("FULLY_LOADED_CHAR") then
+            game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").Health = 0
+        end
+        local newCharacter =  game:GetService("Workspace"):WaitForChild(game:GetService("Players").LocalPlayer.Name)
+        local spoofFolder = Instance.new('Folder');
+        spoofFolder.Name = 'FULLY_LOADED_CHAR';
+        spoofFolder.Parent = newCharacter;
+        newCharacter:WaitForChild('RagdollConstraints'):Destroy();
+        local spoofValue = Instance.new('BoolValue', newCharacter);
+        spoofValue.Name = 'RagdollConstraints';         
+        game:GetService("Players").LocalPlayer.Character.BodyEffects.Defense:Destroy()
+        Defense = Instance.new("IntValue", game:GetService("Players").LocalPlayer.Character.BodyEffects)
+        Defense.Name = "Defense"
+        Defense.Value = 101
+        game:GetService("Players").LocalPlayer.Character:WaitForChild('BodyEffects').Armor:Destroy()
+        local Clone1 = Instance.new("IntValue")
+        Clone1.Name = "Armor"
+        Clone1.Value = 101
+        Clone1.Parent = game:GetService("Players").LocalPlayer.Character.BodyEffects
+    end
+end)()
+
+coroutine.wrap(function()
+    if getgenv().Settings.Custom.Autoblock then
+    	game:GetService('UserInputService').InputBegan:Connect(function(key,b)
+			if key.KeyCode == Enum.KeyCode.F and not b then
+				HoldingF = true
+			end
+		end)
+		game:GetService('UserInputService').InputEnded:Connect(function(key,b)
+			if key.KeyCode == Enum.KeyCode.F and not b then
+				HoldingF = false
+			end
+		end)
+        game:GetService("RunService").RenderStepped:connect(function()
+            local forbidden = {'[RPG]','[SMG]','[TacticalShotgun]','[AK47]','[AUG]','[Glock]', '[Shotgun]','[Flamethrower]','[Silencer]','[AR]','[Revolver]','[SilencerAR]','[LMG]','[P90]','[DrumGun]','[Double-Barrel SG]','[Hamburger]','[Chicken]','[Pizza]','[Cranberry]','[Donut]','[Taco]','[Starblox Latte]','[BrownBag]','[Weights]','[HeavyWeights]'}
+            local Found = false
+            for _,v in pairs(game:GetService("Players"):GetPlayers()) do
+                if v and v.Character and v.Character:FindFirstChild("UpperTorso") and v.Character:FindFirstChild("FULLY_LOADED_CHAR") and (v.Character.UpperTorso.Position - game:GetService("Players").LocalPlayer.Character:WaitForChild("HumanoidRootPart").Position).Magnitude <= 25 then
+                    if v.Character.BodyEffects.Attacking.Value == true and not table.find(forbidden, v.Character:FindFirstChildWhichIsA('Tool').Name ) and v.Name ~= game:GetService("Players").LocalPlayer.Name then
+                        Found = true
+                        game:GetService("ReplicatedStorage").MainEvent:FireServer('Block', game:GetService("Players").LocalPlayer.Name)
+                    end
+                end
+            end
+            if Found == false and HoldingF == false then
+				if game:GetService("Players").LocalPlayer.Character:WaitForChild("BodyEffects"):FindFirstChild('Block') then 
+					game:GetService("Players").LocalPlayer.Character.BodyEffects.Block:Destroy()
+				end
+            end
+		end)
+	end
+end)()
+
+coroutine.wrap(function()
+    if getgenv().Settings.Custom.Hideblock then
+        game:GetService("RunService").RenderStepped:connect(function()
+            pcall(function()
+                for i,v in pairs(game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid"):GetPlayingAnimationTracks()) do
+                    if v.Animation.AnimationId == 'rbxassetid://5641749824' or v.Name == 'Block' then
+                        v:Stop() 
+                    end
+                end
+            end)
+        end)
+    end
+end)()
+
+coroutine.wrap(function()
+    if getgenv().Settings.Custom.Antislow then
+		repeat wait() until not game:GetService("Players").LocalPlayer.Character:FindFirstChild("ForceField_TESTING")
+    	wait(1)
+		game:GetService('UserInputService').InputBegan:Connect(function(key,b)
+			if key.KeyCode == Enum.KeyCode.LeftShift and not b then
+                repeat wait() until not game:GetService("Players").LocalPlayer.Character:FindFirstChild("ForceField_TESTING")
+                game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").Name = "Humanoid "
+				game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").WalkSpeed = 22
+			end
+		end)
+		game:GetService('UserInputService').InputEnded:Connect(function(key,b)
+			if key.KeyCode == Enum.KeyCode.LeftShift and not b then
+                repeat wait() until not game:GetService("Players").LocalPlayer.Character:FindFirstChild("ForceField_TESTING")
+				game:GetService("Players").LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").WalkSpeed = 16
+			end
+		end)
+        game:GetService('UserInputService').InputBegan:Connect(function(key,b)
+            if key.KeyCode == Enum.KeyCode.LeftControl and not b then
+                repeat wait() until not game:GetService("Players").LocalPlayer.Character:FindFirstChild("ForceField_TESTING")
+                AnimPlay(3152394906)
+            end
+        end)
+        game:GetService('UserInputService').InputEnded:Connect(function(key,b)
+            if key.KeyCode == Enum.KeyCode.LeftControl and not b then
+                repeat wait() until not game:GetService("Players").LocalPlayer.Character:FindFirstChild("ForceField_TESTING")
+                AnimStop(3152394906)
+            end
+        end)
+    end
+end)()
+
+coroutine.wrap(function()
+    if getgenv().Settings.Custom.Antieffect then
+        game:GetService("RunService").RenderStepped:connect(function()
+            pcall(function()
+                local Particle = game:GetService("Players").LocalPlayer.Character.UpperTorso:FindFirstChild('ElectricuteParticle') or game:GetService("Players").LocalPlayer.Character.UpperTorso:FindFirstChild('FlamethrowerFireParticle') or game:GetService("Players").LocalPlayer.Character:FindFirstChild('Christmas_Sock')
+                if Particle then 
+                    Particle:Destroy() 
+                end
+            end)
+        end)   
+    end
+end)
+
+game:GetService("Players").LocalPlayer.CharacterAdded:Connect(function(chr) 
+    if GodV2 == true then
+        local newCharacter =  game:GetService("Workspace"):WaitForChild(game:GetService("Players").LocalPlayer.Name)
+        local spoofFolder = Instance.new('Folder');
+        spoofFolder.Name = 'FULLY_LOADED_CHAR';
+        spoofFolder.Parent = newCharacter;
+        newCharacter:WaitForChild('RagdollConstraints'):Destroy();
+        local spoofValue = Instance.new('BoolValue', newCharacter);
+        spoofValue.Name = 'RagdollConstraints';         
+        game:GetService("Players").LocalPlayer.Character.BodyEffects.Defense:Destroy()
+        Defense = Instance.new("IntValue", game:GetService("Players").LocalPlayer.Character.BodyEffects)
+        Defense.Name = "Defense"
+        Defense.Value = 101
+        game:GetService("Players").LocalPlayer.Character:WaitForChild('BodyEffects').Armor:Destroy()
+        local Clone1 = Instance.new("IntValue")
+        Clone1.Name = "Armor"
+        Clone1.Value = 101
+        Clone1.Parent = game:GetService("Players").LocalPlayer.Character.BodyEffects
+		if Godblock == true then
+			game:GetService("Players").LocalPlayer.Character:WaitForChild("BodyEffects"):WaitForChild("Defense"):WaitForChild("CurrentTimeBlock"):Destroy()
+		end
+    end
+end)
+end)
+
+Section:NewButton("Rejoin", "Rejoins in the game you were in", function()
+    local TeleportService = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+ 
+local Rejoin = coroutine.create(function()
+    local Success, ErrorMessage = pcall(function()
+        TeleportService:Teleport(game.PlaceId, LocalPlayer)
+    end)
+ 
+    if ErrorMessage and not Success then
+        warn(ErrorMessage)
+    end
+end)
+ 
+coroutine.resume(Rejoin)
+end)
+
+-- BYPASSES
+
+local Bypasses = Window:NewTab("AntiLock / Resolvers")
+local BypassesSection= Bypasses:NewSection("Bypasses")
+
+BypassesSection:NewButton("AntiLock", "Stops Lockers From Locking On To You", function()
+    getgenv().Underground = true 
+getgenv().UndergroundAmount = 1000
+
+game:GetService("RunService").heartbeat:Connect(function()
+    if getgenv().Underground ~= false then 
+    local vel = game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity
+    game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity = Vector3.new(0,-         getgenv().UndergroundAmount,0) 
+    game:GetService("RunService").RenderStepped:Wait()
+    game.Players.LocalPlayer.Character.HumanoidRootPart.Velocity = vel
+    end 
+end)
+end)
+
+BypassesSection:NewButton("Resolver 1", "Bypasses AntiLockers (Might Only Work With Camlock / Smooth Camlock idk)", function()
+    local RunService = game:GetService("RunService")
+
+local function zeroOutYVelocity(hrp)
+    hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+    hrp.AssemblyLinearVelocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Z)
+end
+
+local function onPlayerAdded(player)
+    player.CharacterAdded:Connect(function(character)
+        local hrp = character:WaitForChild("HumanoidRootPart")
+        zeroOutYVelocity(hrp)
+    end)
+end
+
+local function onPlayerRemoving(player)
+    player.CharacterAdded:Disconnect()
+end
+
+game.Players.PlayerAdded:Connect(onPlayerAdded)
+game.Players.PlayerRemoving:Connect(onPlayerRemoving)
+
+RunService.Heartbeat:Connect(function()
+    pcall(function()
+        for i, player in pairs(game.Players:GetChildren()) do
+            if player.Name ~= game.Players.LocalPlayer.Name then
+                local hrp = player.Character.HumanoidRootPart
+                zeroOutYVelocity(hrp)
+            end
+        end
+    end)
+end)
+end)
+
+BypassesSection:NewButton("Resolver 2", "Bypasses AntiLockers (Might Only Work With Camlock / Smooth Camlock idk)", function()
+    getgenv().VelocityChanger = true
+getgenv().Velocity = Vector3.new(200,0,200)
+
+
+--// main scapt | realkscapter... omg
+local Players     = game:GetService("Players")
+local RunService  = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+local Character   = LocalPlayer.Character
+local RootPart    = Character:FindFirstChild("HumanoidRootPart")
+
+local Heartbeat, RStepped, Stepped = RunService.Heartbeat, RunService.RenderStepped, RunService.Stepped
+
+LocalPlayer.CharacterAdded:Connect(function(NewCharacter)
+   Character = NewCharacter
+end)
+
+local RVelocity, YVelocity = nil, 0.1
+
+while true do
+   if VelocityChanger then
+       --// this a dumb check asnilsadsa
+       if (not RootPart) or (not RootPart.Parent) or (not RootPart.Parent.Parent) then
+           warn("weird ahh died")
+           RootPart = Character:FindFirstChild("HumanoidRootPart")
+       else
+           RVelocity = RootPart.Velocity
+   
+           RootPart.Velocity = type(Velocity) == "vector" and Velocity or Velocity(RVelocity)
+       
+           RStepped:wait()
+       
+           RootPart.Velocity = RVelocity
+       end
+   end
+   
+   Heartbeat:wait()
+end
+end)
+
+BypassesSection:NewButton("Resolver 3", "Bypasses AntiLockers (Might Only Work With Camlock / Smooth Camlock idk)", function()
+    local CPlayer = Aiming.Selected
+local hrp = CPlayer.Character.HumanoidRootPart
+                hrp.Velocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Y, hrp.Velocity.Z)    
+                hrp.AssemblyLinearVelocity = Vector3.new(hrp.Velocity.X, 0, hrp.Velocity.Y, hrp.Velocity.Z)
+end)
+
+
+local Camlocks = Window:NewTab("Camlocks")
+local Camlocks = Main:NewSection("Camlocks / Smooth Camlocks")
+
+Section:NewButton("Smooth Camlock 'e' to toggle ", "Locks Onto A Player", function()
+    getgenv().RecurringPoint = "UpperTorso"
+getgenv().Hitbox = "UpperTorso"
+getgenv().Keybind = "e"
+getgenv().AimbotStrengthAmount = 0.0335
+getgenv().PredictionAmount = 10
+getgenv().Radius = 25
+getgenv().UsePrediction = true
+getgenv().AimbotStrength = true
+getgenv().FirstPerson = true
+getgenv().ThirdPerson = true
+getgenv().TeamCheck = false
+getgenv().Enabled = true
+
+
+loadstring(game:HttpGet("https://raw.githubusercontent.com/tenaaki/GenericAimbot/main/v1.0.0"))()
+end)
+
+
+Section:NewButton("Camlock 'Q' to toggle 'P' to disable ", "Locks Onto A Player", function()
+    getgenv().Prediction = 0.1248710929171	
+getgenv().AimPart = "HumanoidRootPart"	
+getgenv().Key = "Q"	
+getgenv().DisableKey = "P"	
+	
+getgenv().FOV = true	
+getgenv().ShowFOV = false	
+getgenv().FOVSize = 55	
+	
+--// Variables (Service)	
+	
+local Players = game:GetService("Players")	
+local RS = game:GetService("RunService")	
+local WS = game:GetService("Workspace")	
+local GS = game:GetService("GuiService")	
+local SG = game:GetService("StarterGui")	
+	
+--// Variables (regular)	
+	
+local LP = Players.LocalPlayer	
+local Mouse = LP:GetMouse()	
+local Camera = WS.CurrentCamera	
+local GetGuiInset = GS.GetGuiInset	
+	
+local AimlockState = true	
+local Locked	
+local Victim	
+	
+local SelectedKey = getgenv().Key	
+local SelectedDisableKey = getgenv().DisableKey	
+	
+--// Notification function	
+	
+function Notify(tx)	
+    SG:SetCore("SendNotification", {	
+        Title = "Evan's Camlock",	
+        Text = tx,	
+Duration = 5	
+    })	
+end	
+	
+--// Check if aimlock is loaded	
+	
+if getgenv().Loaded == true then	
+    Notify("Aimlock is already loaded!")	
+    return	
+end	
+	
+getgenv().Loaded = true	
+	
+--// FOV Circle	
+	
+local fov = Drawing.new("Circle")	
+fov.Filled = false	
+fov.Transparency = 1	
+fov.Thickness = 1	
+fov.Color = Color3.fromRGB(255, 255, 0)	
+fov.NumSides = 1000	
+	
+--// Functions	
+	
+function update()	
+    if getgenv().FOV == true then	
+        if fov then	
+fov.Radius = getgenv().FOVSize * 2	
+            fov.Visible = getgenv().ShowFOV	
+fov.Position = Vector2.new(Mouse.X, Mouse.Y + GetGuiInset(GS).Y)	
+	
+            return fov	
+        end	
+    end	
+end	
+	
+function WTVP(arg)	
+    return Camera:WorldToViewportPoint(arg)	
+end	
+	
+function WTSP(arg)	
+    return Camera.WorldToScreenPoint(Camera, arg)	
+end	
+	
+function getClosest()	
+    local closestPlayer	
+    local shortestDistance = math.huge	
+	
+    for i, v in pairs(game.Players:GetPlayers()) do	
+        local notKO = v.Character:WaitForChild("BodyEffects")["K.O"].Value ~= true	
+        local notGrabbed = v.Character:FindFirstChild("GRABBING_COINSTRAINT") == nil	
+        	
+if v ~= game.Players.LocalPlayer and v.Character and v.Character:FindFirstChild("Humanoid") and v.Character.Humanoid.Health ~= 0 and v.Character:FindFirstChild(getgenv().AimPart) and notKO and notGrabbed then	
+            local pos = Camera:WorldToViewportPoint(v.Character.PrimaryPart.Position)	
+local magnitude = (Vector2.new(pos.X, pos.Y) - Vector2.new(Mouse.X, Mouse.Y)).magnitude	
+            	
+            if (getgenv().FOV) then	
+                if (fov.Radius > magnitude and magnitude < shortestDistance) then	
+                    closestPlayer = v	
+                    shortestDistance = magnitude	
+                end	
+            else	
+                if (magnitude < shortestDistance) then	
+                    closestPlayer = v	
+                    shortestDistance = magnitude	
+                end	
+            end	
+        end	
+    end	
+    return closestPlayer	
+end	
+	
+--// Checks if key is down	
+	
+Mouse.KeyDown:Connect(function(k)	
+    SelectedKey = SelectedKey:lower()	
+    SelectedDisableKey = SelectedDisableKey:lower()	
+    if k == SelectedKey then	
+        if AimlockState == true then	
+            Locked = not Locked	
+            if Locked then	
+                Victim = getClosest()	
+	
+                Notify("Locked onto: "..tostring(Victim.Character.Humanoid.DisplayName))	
+            else	
+                if Victim ~= nil then	
+                    Victim = nil	
+	
+                    Notify("Unlocked!")	
+                end	
+            end	
+        else	
+            Notify("Aimlock is not enabled!")	
+        end	
+    end	
+    if k == SelectedDisableKey then	
+        AimlockState = not AimlockState	
+    end	
+end)	
+	
+--// Loop update FOV and loop camera lock onto target	
+	
+RS.RenderStepped:Connect(function()	
+    update()	
+    if AimlockState == true then	
+        if Victim ~= nil then	
+            Camera.CFrame = CFrame.new(Camera.CFrame.p, Victim.Character[getgenv().AimPart].Position + Victim.Character[getgenv().AimPart].Velocity*getgenv().Prediction)	
+        end	
+    end	
+end)	
+	while wait() do
+        if getgenv().AutoPrediction == true then	
+        local pingvalue = game:GetService("Stats").Network.ServerStatsItem["Data Ping"]:GetValueString()	
+        local split = string.split(pingvalue,'(')	
+local ping = tonumber(split[1])	
+if ping < 225 then	
+getgenv().Prediction = 1.4	
+elseif ping < 215 then	
+getgenv().Prediction = 1.2	
+	elseif ping < 205 then
+getgenv().Prediction = 1.0	
+	elseif ping < 190 then
+getgenv().Prediction = 0.10	
+elseif ping < 180 then	
+getgenv().Prediction = 0.12	
+	elseif ping < 170 then
+getgenv().Prediction = 0.15	
+	elseif ping < 160 then
+getgenv().Prediction = 0.18	
+	elseif ping < 150 then
+getgenv().Prediction = 0.110	
+elseif ping < 140 then	
+getgenv().Prediction = 0.113	
+elseif ping < 130 then	
+getgenv().Prediction = 0.116	
+elseif ping < 120 then	
+getgenv().Prediction = 0.120	
+elseif ping < 110 then	
+getgenv().Prediction = 0.124	
+elseif ping < 105 then	
+getgenv().Prediction = 0.127	
+elseif ping < 90 then	
+getgenv().Prediction = 0.130	
+elseif ping < 80 then	
+getgenv().Prediction = 0.133	
+elseif ping < 70 then	
+getgenv().Prediction = 0.136	
+elseif ping < 60 then	
+getgenv().Prediction = 0.140	
+elseif ping < 50 then	
+getgenv().Prediction = 0.143	
+elseif ping < 40 then	
+getgenv().Prediction = 0.145	
+elseif ping < 30 then	
+getgenv().Prediction = 0.155	
+elseif ping < 20 then	
+getgenv().Prediction = 0.157	
+        end	
+        end	
+	end
+
+end)
